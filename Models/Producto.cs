@@ -6,9 +6,11 @@ namespace Pedidos_web.Models
     public class Producto
     {
         [Key]
+        [Column("id_producto")]
         public int Id { get; set; }
 
         [Required]
+        [Column("nombre")]
         [StringLength(200)] // Ajustado a la longitud real en BD
         public required string Nombre { get; set; }
 
