@@ -29,8 +29,7 @@ namespace Pedidos_web.Controllers
                 return BadRequest("Datos del pedido incompletos.");
             }
 
-            // Iniciar transacción
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
@@ -53,10 +52,9 @@ namespace Pedidos_web.Controllers
 
                     if (producto.Stock < detalleDto.Cantidad)
                     {
-                        return BadRequest($"No hay suficiente stock para el producto ID {producto.Id}. Stock disponible: {producto.Stock}");
+                        return BadRequest($"No hay suficiente stock para el producto con ID {producto.Id}.");
                     }
 
-                    // Restar stock
                     producto.Stock -= detalleDto.Cantidad;
 
                     var detalle = new DetallePedido
@@ -74,6 +72,7 @@ namespace Pedidos_web.Controllers
 
                 _context.Pedidos.Add(pedido);
                 await _context.SaveChangesAsync();
+
                 await transaction.CommitAsync();
 
                 return CreatedAtAction(nameof(GetPedido), new { id = pedido.Id }, pedido);
@@ -81,10 +80,44 @@ namespace Pedidos_web.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, $"Error al crear el pedido: {ex.Message}");
+                return StatusCode(500, $"Ocurrió un error al procesar el pedido: {ex.Message}");
             }
         }
 
+
+
+        // GET: api/pedidos
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> GetPedidos([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            if (page <= 0 || pageSize <= 0)
+            {
+                return BadRequest("Parámetros de paginación inválidos.");
+            }
+
+            var totalPedidos = await _context.Pedidos.CountAsync();
+
+            var pedidos = await _context.Pedidos
+                .Include(p => p.Vendedor)
+                .Include(p => p.Detalles)
+                    .ThenInclude(d => d.Producto)
+                .OrderByDescending(p => p.Fecha)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var resultado = new
+            {
+                paginaActual = page,
+                tamañoPagina = pageSize,
+                totalPedidos,
+                totalPaginas = (int)Math.Ceiling(totalPedidos / (double)pageSize),
+                pedidos
+            };
+
+            return Ok(resultado);
+        }
 
 
 
